@@ -1,25 +1,30 @@
+package si;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.font.FontRenderContext;
-import java.awt.geom.AffineTransform;
 
 public class PongGame extends JPanel implements KeyListener, ActionListener {
-    private int paddle1Y = 150, paddle2Y = 150, paddle3X = 225;
-    private int ballX = 250, ballY = 250;
-    private int ballDirX = -2, ballDirY = 2;
-    private final int PADDLE_WIDTH = 10, PADDLE_HEIGHT = 50;
-    private final int BALL_SIZE = 10;
+    private int paddle1Y = 160, paddle2Y = 160, paddle3X = 224;
+    private int ballX = 240, ballY = 240;
+    private int ballDirX = -4, ballDirY = 4;
+    private final int PADDLE_WIDTH = 16, PADDLE_HEIGHT = 64;
+    private final int BALL_SIZE = 16;
     private int score1 = 0, score2 = 0, score3 = 0;
     private Timer timer;
-    private int playerCount = 3;
+    private int playerCount = 2;
+
+    // Movement flags
+    private boolean upPressed = false, downPressed = false;
+    private boolean wPressed = false, sPressed = false;
+    private boolean aPressed = false, dPressed = false;
 
     public PongGame() {
-        setPreferredSize(new Dimension(500, 500));
+        setPreferredSize(new Dimension(512, 512));
         setBackground(Color.BLACK);
         setFocusable(true);
         addKeyListener(this);
-        timer = new Timer(5, this);
+        timer = new Timer(20, this);  // Faster timer for smooth paddle movement
         timer.start();
         createMenu();
     }
@@ -51,16 +56,16 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
     }
 
     private void resetGame() {
-        paddle1Y = 150;
-        paddle2Y = 150;
-        paddle3X = 225;
-        ballX = 250;
-        ballY = 250;
+        paddle1Y = 160;
+        paddle2Y = 160;
+        paddle3X = 224;
+        ballX = 240;
+        ballY = 240;
         score1 = 0;
         score2 = 0;
         score3 = 0;
-        ballDirX = -2;
-        ballDirY = 2;
+        ballDirX = -4;
+        ballDirY = 4;
         repaint();
     }
 
@@ -69,33 +74,33 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
 
         // Draw middle line
         g.setColor(Color.WHITE);
-        g.drawLine(250, 0, 250, 500);
+        g.drawLine(256, 0, 256, 512);
 
         // Draw paddles
-        g.fillRect(20, paddle1Y, PADDLE_WIDTH, PADDLE_HEIGHT);
-        g.fillRect(470, paddle2Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        g.fillRect(16, paddle1Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        g.fillRect(480, paddle2Y, PADDLE_WIDTH, PADDLE_HEIGHT);
         if (playerCount == 3) {
-            g.fillRect(paddle3X, 470, PADDLE_HEIGHT, PADDLE_WIDTH);
+            g.fillRect(paddle3X, 480, PADDLE_HEIGHT, PADDLE_WIDTH);
         }
 
         // Draw ball
         g.fillOval(ballX, ballY, BALL_SIZE, BALL_SIZE);
 
         // Draw scores
-        drawScore(g, score1, 100, 50);
-        drawScore(g, score2, 400, 50);
+        drawScore(g, score1, 128, 48);
+        drawScore(g, score2, 384, 48);
         if (playerCount == 3) {
-            drawScore(g, score3, 250, 450);
+            drawScore(g, score3, 256, 448);
         }
     }
 
     private void drawScore(Graphics g, int score, int x, int y) {
         try {
-            Font pixelFont = Font.createFont(Font.TRUETYPE_FONT, getClass().getResourceAsStream("/fonts/PressStart2P.ttf")).deriveFont(24f);
+            Font pixelFont = Font.createFont(Font.TRUETYPE_FONT, getClass().getResourceAsStream("/fonts/PressStart2P.ttf")).deriveFont(32f);
             g.setFont(pixelFont);
         } catch (Exception e) {
             e.printStackTrace();
-            g.setFont(new Font("Monospaced", Font.PLAIN, 24));
+            g.setFont(new Font("Monospaced", Font.PLAIN, 32));
         }
         g.drawString(String.valueOf(score), x, y);
     }
@@ -108,15 +113,15 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
             ballDirY = -ballDirY;
         }
 
-        if (ballX <= 30 && ballY >= paddle1Y && ballY <= paddle1Y + PADDLE_HEIGHT) {
+        if (ballX <= 32 && ballY >= paddle1Y && ballY <= paddle1Y + PADDLE_HEIGHT) {
             ballDirX = -ballDirX;
         }
 
-        if (ballX >= 460 && ballY >= paddle2Y && ballY <= paddle2Y + PADDLE_HEIGHT) {
+        if (ballX >= 464 && ballY >= paddle2Y && ballY <= paddle2Y + PADDLE_HEIGHT) {
             ballDirX = -ballDirX;
         }
 
-        if (playerCount == 3 && ballY >= 460 && ballX >= paddle3X && ballX <= paddle3X + PADDLE_HEIGHT) {
+        if (playerCount == 3 && ballY >= 464 && ballX >= paddle3X && ballX <= paddle3X + PADDLE_HEIGHT) {
             ballDirY = -ballDirY;
         }
 
@@ -131,43 +136,90 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
             resetBall();
         }
 
+        // Move paddles based on key presses
+        if (wPressed && paddle1Y > 0) {
+            paddle1Y -= 8;
+        }
+        if (sPressed && paddle1Y < getHeight() - PADDLE_HEIGHT) {
+            paddle1Y += 8;
+        }
+        if (upPressed && paddle2Y > 0) {
+            paddle2Y -= 8;
+        }
+        if (downPressed && paddle2Y < getHeight() - PADDLE_HEIGHT) {
+            paddle2Y += 8;
+        }
+        if (playerCount == 3) {
+            if (aPressed && paddle3X > 0) {
+                paddle3X -= 8;
+            }
+            if (dPressed && paddle3X < getWidth() - PADDLE_HEIGHT) {
+                paddle3X += 8;
+            }
+        }
+
         repaint();
     }
 
     private void resetBall() {
-        ballX = 250;
-        ballY = 250;
-        ballDirX = -ballDirX;
+        ballX = 240; // Reset ball to the center of the field
+        ballY = 240;
+        ballDirX = -ballDirX; // Reverse the direction of the ball
+        ballDirY = -ballDirY;
     }
 
     public void keyPressed(KeyEvent e) {
         int key = e.getKeyCode();
-        if (key == KeyEvent.VK_W && paddle1Y > 0) {
-            paddle1Y -= 10;
+        if (key == KeyEvent.VK_W) {
+            wPressed = true;
         }
-        if (key == KeyEvent.VK_S && paddle1Y < getHeight() - PADDLE_HEIGHT) {
-            paddle1Y += 10;
+        if (key == KeyEvent.VK_S) {
+            sPressed = true;
         }
-        if (key == KeyEvent.VK_UP && paddle2Y > 0) {
-            paddle2Y -= 10;
+        if (key == KeyEvent.VK_UP) {
+            upPressed = true;
         }
-        if (key == KeyEvent.VK_DOWN && paddle2Y < getHeight() - PADDLE_HEIGHT) {
-            paddle2Y += 10;
+        if (key == KeyEvent.VK_DOWN) {
+            downPressed = true;
         }
         if (playerCount == 3) {
-            if (key == KeyEvent.VK_A && paddle3X > 0) {
-                paddle3X -= 10;
+            if (key == KeyEvent.VK_A) {
+                aPressed = true;
             }
-            if (key == KeyEvent.VK_D && paddle3X < getWidth() - PADDLE_HEIGHT) {
-                paddle3X += 10;
+            if (key == KeyEvent.VK_D) {
+                dPressed = true;
             }
         }
     }
 
-    public void keyReleased(KeyEvent e) {}
+    public void keyReleased(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (key == KeyEvent.VK_W) {
+            wPressed = false;
+        }
+        if (key == KeyEvent.VK_S) {
+            sPressed = false;
+        }
+        if (key == KeyEvent.VK_UP) {
+            upPressed = false;
+        }
+        if (key == KeyEvent.VK_DOWN) {
+            downPressed = false;
+        }
+        if (playerCount == 3) {
+            if (key == KeyEvent.VK_A) {
+                aPressed = false;
+            }
+            if (key == KeyEvent.VK_D) {
+                dPressed = false;
+            }
+        }
+    }
+
     public void keyTyped(KeyEvent e) {}
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(PongGame::new);
     }
 }
+
