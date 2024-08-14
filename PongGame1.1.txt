@@ -1,11 +1,6 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.BasicStroke;
-import javax.swing.JPanel;
-import javax.swing.JFrame;
 
 public class PongGame extends JPanel implements KeyListener, ActionListener {
     private int paddle1Y = 160, paddle2Y = 160;
@@ -16,9 +11,10 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
     private int score1 = 0, score2 = 0;
     private Timer timer;
     private double speedMultiplier = 1.05;
-    private final int SCORE_LIMIT = 10; // Límite de puntaje
-    private final int GAME_TIME = 120; // Tiempo de juego en segundos
+    private final int SCORE_LIMIT = 7; // Limite goles
+    private final int GAME_TIME = 120; // Tiempo en segundos
     private long startTime;
+    private boolean gameOver = false; // Nueva bandera para controlar el estado del juego
 
     // Movement flags
     private boolean upPressed = false, downPressed = false;
@@ -32,7 +28,7 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
         timer = new Timer(20, this); 
         timer.start();
 
-        startTime = System.currentTimeMillis(); // Inicializar el tiempo de inicio
+        startTime = System.currentTimeMillis(); // Iniciar juego
 
         JFrame frame = new JFrame("Pong Game");
         frame.add(this);
@@ -50,8 +46,9 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
         score2 = 0;
         ballDirX = -4;
         ballDirY = 4;
-        speedMultiplier = 1.05; // Resetear el multiplicador de velocidad
-        startTime = System.currentTimeMillis(); // Reiniciar el tiempo de inicio
+        speedMultiplier = 1.2; // Reiniciar multiplicador de tiempo
+        startTime = System.currentTimeMillis(); // Reiniciar tiempo de juego
+        gameOver = false; // Reiniciar estado del juego
         repaint();
     }
 
@@ -59,28 +56,15 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
         super.paintComponent(g);
 
         Graphics2D g2d = (Graphics2D) g;
-        
-        // Draw middle line
-        g.setColor(Color.WHITE);
-        g.drawLine(512, 0, 512, 576);
-        
+
+        // LINEA MEDIO
         g2d.setStroke(new BasicStroke(2));
-        
-        // Linea medio
         g.setColor(Color.WHITE);
         g.drawLine(0, 288, 1024, 288);
         
+        // Draw middle dotted line
+        drawDottedLine(g2d, 512, 0, 512, getHeight());
         
-        
-        /*
-        // linea 2
-        g.setColor(Color.WHITE);
-        g.drawLine(0, 70, 1024, 70);
-        // linea 3
-        g.setColor(Color.WHITE);
-        g.drawLine(0, 506, 1024, 506);
-		*/
-
         // Draw left paddle (Player 1)
         g.setColor(new Color(240,76,49));
         g.fillRect(16, paddle1Y, PADDLE_WIDTH, PADDLE_HEIGHT);
@@ -100,27 +84,55 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
         // Draw remaining time
         long elapsedTime = (System.currentTimeMillis() - startTime) / 1000;
         long remainingTime = GAME_TIME - elapsedTime;
-        if (remainingTime > 0) {
-            g.setFont(new Font("Monospaced", Font.PLAIN, 24));
+        if (remainingTime > 0 && !gameOver) {
+            g.setFont(new Font("Monospaced", Font.BOLD, 26));
             g.setColor(Color.BLACK);
-            g.drawString("Tiempo: " + remainingTime + "s", getWidth() / 2 - 70, 40);
+            g.drawString("TIEMPO: " + remainingTime + "s", getWidth() / 2 - 70, 40);
+        } else if (!gameOver) {
+            gameOver = true; // Finalizar el juego
+            repaint();
         } else {
-            timer.stop();
-            g.drawString("Es un EMPATE!", getWidth() / 2 - 50, getHeight() / 2);
+            drawGameOverScreen(g);
+        }
+    }
+
+    private void drawDottedLine(Graphics2D g2d, int x1, int y1, int x2, int y2) {
+        int segmentWidth = 10; // Ancho de cada segmento
+        int segmentHeight = 2; // Grosor de la línea
+        int dashLength = 5;   // Longitud de cada segmento
+        int gapLength = 0;    // Espaciado entre segmentos
+
+        g2d.setStroke(new BasicStroke(segmentHeight, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL));
+        
+        Color color1 = Color.DARK_GRAY;
+        Color color2 = Color.WHITE;
+
+        int length = y2 - y1;
+        int currentY = y1;
+        boolean drawColor1 = true;
+
+        while (currentY < y2) {
+            g2d.setColor(drawColor1 ? color1 : color2);
+            int nextY = Math.min(currentY + dashLength, y2);
+            g2d.drawLine(x1, currentY, x1, nextY);
+            currentY = nextY + gapLength;
+            drawColor1 = !drawColor1;
         }
     }
 
     private void drawScore(Graphics g, int score, int x, int y) {
-        g.setFont(new Font("Monospaced", Font.PLAIN, 32));
+        g.setFont(new Font("Monospaced", Font.BOLD, 32));
         g.drawString(String.valueOf(score), x, y);
     }
 
     public void actionPerformed(ActionEvent e) {
+        if (gameOver) return; // No actualizar si el juego está terminado
+        
         ballX += ballDirX;
         ballY += ballDirY;
 
         // Check collision with top and bottom walls
-        if (ballY <= 70	 || ballY >= getHeight() -70- BALL_SIZE) {
+        if (ballY <= 0 || ballY >= getHeight() - BALL_SIZE) {
             ballDirY = -ballDirY;
         }
 
@@ -140,23 +152,21 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
         if (ballX < 0) {
             score2++;
             if (score2 >= SCORE_LIMIT) {
-                timer.stop(); // Detener el juego
-                JOptionPane.showMessageDialog(this, "Player 2 Wins!");
-                resetGame();
+                gameOver = true;
+                repaint();
             } else {
                 resetBall();
             }
         } else if (ballX > getWidth()) {
             score1++;
             if (score1 >= SCORE_LIMIT) {
-                timer.stop(); // Detener el juego
-                JOptionPane.showMessageDialog(this, "Player 1 Wins!");
-                resetGame();
+                gameOver = true;
+                repaint();
             } else {
                 resetBall();
             }
         }
-
+        
         // Move paddles based on key presses
         if (wPressed && paddle1Y > 0) {
             paddle1Y -= 8;
@@ -179,14 +189,44 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
         ballY = 272;
         ballDirX = -4;
         ballDirY = 4;
-        speedMultiplier = 1.5; 
+        speedMultiplier = 1.2; 
     }
 
     private void increaseBallSpeed() {
         ballDirX *= speedMultiplier;
         ballDirY *= speedMultiplier;
+    }
+    
+    private void drawGameOverScreen(Graphics g) {
 
-
+        if (score1 > score2) {
+            g.setColor(new Color(40,66,166,120));
+            g.fillRect(0, 0, getWidth(), getHeight());
+        	
+            g.setColor(new Color(240,76,49)); // Color para jugador 
+        } else if(score2 > score1) {
+            g.setColor(new Color(240,76,49,120));
+            g.fillRect(0, 0, getWidth(), getHeight());
+            
+            g.setColor(new Color(40,66,166)); // Color para jugador 2
+        } else if(score1 == score2) {
+            g.setColor(new Color(0,0,0,120));
+            g.fillRect(0, 0, getWidth(), getHeight());
+            
+            g.setColor(new Color(255,255,255)); // Color para empate
+        }
+        
+        g.setFont(new Font("Monospaced", Font.BOLD, 36));
+        FontMetrics metrics = g.getFontMetrics();
+        String winnerText = (score1 > score2) ? "Jugador 1 Gana" : (score2 > score1) ? "Jugador 2 Gana" : "Empate";
+        int textWidth = metrics.stringWidth(winnerText);
+        int textHeight = metrics.getAscent();
+        int x = (getWidth() - textWidth) / 2;
+        int y = (getHeight() - textHeight) / 2 - 10;
+        
+        g.drawString(winnerText, x, y);
+        g.setFont(new Font("Monospaced", Font.BOLD, 30));
+        g.drawString("Presione R para reiniciar el juego", getWidth() / 2 - 270, getHeight() / 2 + 30);
     }
 
     public void keyPressed(KeyEvent e) {
@@ -202,6 +242,9 @@ public class PongGame extends JPanel implements KeyListener, ActionListener {
         }
         if (key == KeyEvent.VK_DOWN) {
             downPressed = true;
+        }
+        if (key == KeyEvent.VK_R && gameOver) {
+            resetGame();
         }
     }
 
