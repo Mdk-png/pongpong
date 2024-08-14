@@ -1,0 +1,392 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class PongGame extends JPanel implements KeyListener, ActionListener {
+    private int paddle1Y = 160, paddle2Y = 160, paddle3X = 352;
+    private int ballX = 480, ballY = 272;
+    private int ballDirX = -4, ballDirY = 4;
+    private final int PADDLE_WIDTH = 16, PADDLE_HEIGHT = 64;
+    private final int BALL_SIZE = 16;
+    private final int PROJECTILE_SIZE = 8;
+    private int score1 = 0, score2 = 0, score3 = 0;
+    private Timer timer;
+    private int playerCount = 2;
+    private double speedMultiplier = 1.05;
+    private int inversa= 1;
+    // Movement flags
+    private boolean upPressed = false, downPressed = false;
+    private boolean wPressed = false, sPressed = false;
+    private boolean aPressed = false, dPressed = false;
+
+    // Shooting flags
+    private boolean shoot1Pressed = false, shoot2Pressed = false, shoot3Pressed = false;
+
+    // Last shoot time
+    private long lastShootTime1 = 0;
+    private long lastShootTime2 = 0;
+    private long lastShootTime3 = 0;
+    private final long SHOOT_COOLDOWN = 500; // 0.5 seconds in milliseconds
+
+    // List to keep track of projectiles
+    private List<Projectile> projectiles;
+
+    public PongGame() {
+        setPreferredSize(new Dimension(1024, 576)); // 16:9 Aspect Ratio
+        setBackground(Color.BLACK);
+        setFocusable(true);
+        addKeyListener(this);
+        timer = new Timer(20, this);  // Timer for paddle movement
+        timer.start();
+        projectiles = new ArrayList<>();
+        createMenu();
+    }
+
+    private void createMenu() {
+        JMenuBar menuBar = new JMenuBar();
+        menuBar.setBackground(Color.BLACK);
+        JMenu menu = new JMenu("Options");
+        menu.setForeground(Color.WHITE);
+        menu.setBackground(Color.BLACK);
+        JMenuItem twoPlayers = new JMenuItem("2 Players");
+        twoPlayers.setForeground(Color.WHITE);
+        twoPlayers.setBackground(Color.BLACK);
+        JMenuItem threePlayers = new JMenuItem("3 Players");
+        threePlayers.setForeground(Color.WHITE);
+        threePlayers.setBackground(Color.BLACK);
+
+        twoPlayers.addActionListener(e -> setPlayerCount(2));
+        threePlayers.addActionListener(e -> setPlayerCount(3));
+
+        menu.add(twoPlayers);
+        menu.add(threePlayers);
+        menuBar.add(menu);
+
+        JFrame frame = new JFrame("Pong Game");
+        frame.setJMenuBar(menuBar);
+        frame.getContentPane().add(this);
+        frame.pack();
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+    }
+
+    private void setPlayerCount(int count) {
+        playerCount = count;
+        resetGame();
+    }
+
+    private void resetGame() {
+        paddle1Y = 256; // Centering paddles for 16:9
+        paddle2Y = 256;
+        paddle3X = 352; // Centering third paddle
+        ballX = 480;
+        ballY = 272;
+        score1 = 0;
+        score2 = 0;
+        score3 = 0;
+        ballDirX = -4;
+        ballDirY = 4;
+        projectiles.clear();
+        repaint();
+    }
+
+    public void paintComponent(Graphics g) {
+        super.paintComponent(g);
+
+        // Draw middle line
+        g.setColor(Color.WHITE);
+        g.drawLine(512,0, 512, 576);
+
+        // Draw paddles
+        g.fillRect(16, paddle1Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        g.fillRect(992, paddle2Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        if (playerCount == 3) {
+            g.fillRect(paddle3X, 560, PADDLE_HEIGHT, PADDLE_WIDTH);
+        }
+
+        // Draw ball
+        g.fillOval(ballX, ballY, BALL_SIZE, BALL_SIZE);
+
+        // Draw projectiles
+        g.setColor(Color.RED);
+        for (Projectile p : projectiles) {
+            g.fillRect(p.x, p.y, PROJECTILE_SIZE, PROJECTILE_SIZE);
+        }
+
+        // Draw scores
+        drawScore(g, score1, 256, 48);
+        drawScore(g, score2, 768, 48);
+        if (playerCount == 3) {
+            drawScore(g, score3, 512, 512);
+        }
+    }
+
+    private void drawScore(Graphics g, int score, int x, int y) {
+        g.setFont(new Font("Monospaced", Font.PLAIN, 32));
+        g.drawString(String.valueOf(score), x, y);
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        ballX += ballDirX;
+        ballY += ballDirY;
+
+        // Update projectiles
+        for (Projectile p : projectiles) {
+            p.move();
+        }
+
+        // Remove projectiles that go off-screen
+        projectiles.removeIf(p -> p.isOffScreen());
+
+        // Check collision between projectiles and the ball
+        checkProjectileCollisions();
+
+        // Check collision with top and bottom walls
+        if (ballY <= 0 || ballY >= getHeight() - BALL_SIZE) {
+            ballDirY = -ballDirY;
+        }
+
+     // Check collision with left paddle (Player 1)
+        if (ballX <= 32 && ballY + BALL_SIZE >= paddle1Y && ballY <= paddle1Y + PADDLE_HEIGHT) {
+            ballX = 33;  // Ajusta la posición de la pelota para que esté justo fuera de la paleta
+            ballDirX = -ballDirX;
+            increaseBallSpeed();
+        }
+
+     // Check collision with the top or bottom of the left paddle (Player 1)
+        if (ballX >= 16 && ballX <= 32) {
+            if (ballY + BALL_SIZE >= paddle1Y && ballY <= paddle1Y + PADDLE_HEIGHT) {
+                if (ballDirY > 0) {
+                    ballY = paddle1Y - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera del lado superior
+                } else {
+                    ballY = paddle1Y + PADDLE_HEIGHT;  // Ajusta la posición de la pelota para que esté justo fuera del lado inferior
+                }
+                ballDirX = -ballDirX;
+                increaseBallSpeed();
+            }
+        }
+
+
+
+
+     // Check collision with right paddle (Player 2)
+        if (ballX >= getWidth() - 48 && ballY + BALL_SIZE >= paddle2Y && ballY <= paddle2Y + PADDLE_HEIGHT) {
+            ballX = getWidth() - 48 - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera de la paleta
+            ballDirX = -ballDirX;
+            increaseBallSpeed();
+        }
+     // Check collision with the top or bottom of the right paddle (Player 2)
+        if (ballX >= getWidth() - 32 && ballX <= getWidth() - 16) {
+            if (ballY + BALL_SIZE >= paddle2Y && ballY <= paddle2Y + PADDLE_HEIGHT) {
+                if (ballDirY > 0) {
+                    ballY = paddle2Y - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera del lado superior
+                } else {
+                    ballY = paddle2Y + PADDLE_HEIGHT;  // Ajusta la posición de la pelota para que esté justo fuera del lado inferior
+                }
+                ballDirX = -ballDirX;
+                increaseBallSpeed();
+            }
+        }
+
+
+     // Check collision with bottom paddle (Player 3)
+        if (playerCount == 3 && ballY >= getHeight() - 40 && ballX + BALL_SIZE >= paddle3X && ballX <= paddle3X + PADDLE_HEIGHT) {
+            ballY = getHeight() - 40 - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera de la paleta
+            ballDirY = -ballDirY;
+            increaseBallSpeed();
+        }
+
+     // Check collision with the left or right side of the bottom paddle (Player 3)
+        if (playerCount == 3) {
+            if (ballY >= getHeight() - 32 && ballY <= getHeight() - 16) {
+                if (ballX + BALL_SIZE >= paddle3X && ballX <= paddle3X + PADDLE_HEIGHT) {
+                    if (ballDirX > 0) {
+                        ballX = paddle3X - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera del lado izquierdo
+                    } else {
+                        ballX = paddle3X + PADDLE_HEIGHT;  // Ajusta la posición de la pelota para que esté justo fuera del lado derecho
+                    }
+                    ballDirY = -ballDirY ;
+                    increaseBallSpeed();
+                }
+            }
+        }
+
+        // Check for scoring
+        if (ballX < 0) {
+            score2++;
+            resetBall();
+        } else if (ballX > getWidth()) {
+            score1++;
+            resetBall();
+        } else if (playerCount == 3 && ballY > getHeight()) {
+            score3++;
+            resetBall();
+        }
+
+        // Move paddles based on key presses
+        if (wPressed && paddle1Y > 0) {
+            paddle1Y -= 16;
+        }
+        if (sPressed && paddle1Y < getHeight() - PADDLE_HEIGHT) {
+            paddle1Y += 16;
+        }
+        if (upPressed && paddle2Y > 0) {
+            paddle2Y -= 16;
+        }
+        if (downPressed && paddle2Y < getHeight() - PADDLE_HEIGHT) {
+            paddle2Y += 16;
+        }
+        if (playerCount == 3) {
+            if (aPressed && paddle3X > 0) {
+                paddle3X -= 16;
+            }
+            if (dPressed && paddle3X < getWidth() - PADDLE_HEIGHT) {
+                paddle3X += 16;
+            }
+        }
+
+        // Handle shooting with cooldown
+        long currentTime = System.currentTimeMillis();
+        if (shoot1Pressed && (currentTime - lastShootTime1) >= SHOOT_COOLDOWN) {
+            projectiles.add(new Projectile(32, paddle1Y + PADDLE_HEIGHT / 2 - PROJECTILE_SIZE / 2, 12, 0));
+            lastShootTime1 = currentTime;
+        }
+        if (shoot2Pressed && (currentTime - lastShootTime2) >= SHOOT_COOLDOWN) {
+            projectiles.add(new Projectile(992, paddle2Y + PADDLE_HEIGHT / 2 - PROJECTILE_SIZE / 2, -12, 0));
+            lastShootTime2 = currentTime;
+        }
+        if (playerCount == 3 && shoot3Pressed && (currentTime - lastShootTime3) >= SHOOT_COOLDOWN) {
+            projectiles.add(new Projectile(paddle3X + PADDLE_HEIGHT / 2 - PROJECTILE_SIZE / 2, 560, 0, -12));
+            lastShootTime3 = currentTime;
+        }
+
+        repaint();
+    }
+
+    private void checkProjectileCollisions() {
+        for (Projectile p : projectiles) {
+            if (p.getBounds().intersects(new Rectangle(ballX, ballY, BALL_SIZE, BALL_SIZE))) {
+                // Change ball direction based on the projectile's movement
+                ballDirX += p.vx;
+                ballDirY += p.vy;
+                projectiles.remove(p);
+                break;
+            }
+        }
+    }
+
+    private void resetBall() {
+        
+    	ballX = 480; // Center ball for 16:9 field
+        ballY = 272;
+        ballDirX = -4 * -inversa;
+        ballDirY = 4;
+        speedMultiplier = 1.10; // Reset speed multiplier
+        inversa= -inversa;
+    }
+
+    private void increaseBallSpeed() {
+        ballDirX *= speedMultiplier;
+        ballDirY *= speedMultiplier;
+    }
+
+    public void keyPressed(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (key == KeyEvent.VK_W) {
+            wPressed = true;
+        }
+        if (key == KeyEvent.VK_S) {
+            sPressed = true;
+        }
+        if (key == KeyEvent.VK_UP) {
+            upPressed = true;
+        }
+        if (key == KeyEvent.VK_DOWN) {
+            downPressed = true;
+        }
+        if (key == KeyEvent.VK_D) {
+            shoot1Pressed = true;
+        }
+        if (key == KeyEvent.VK_LEFT) {
+            shoot2Pressed = true;
+        }
+        if (playerCount == 3) {
+            if (key == KeyEvent.VK_G) {
+                aPressed = true;
+            }
+            if (key == KeyEvent.VK_H) {
+                dPressed = true;
+            }
+            if (key == KeyEvent.VK_Y) {
+                shoot3Pressed = true;
+            }
+        }
+    }
+
+    public void keyReleased(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (key == KeyEvent.VK_W) {
+            wPressed = false;
+        }
+        if (key == KeyEvent.VK_S) {
+            sPressed = false;
+        }
+        if (key == KeyEvent.VK_UP) {
+            upPressed = false;
+        }
+        if (key == KeyEvent.VK_DOWN) {
+            downPressed = false;
+        }
+        if (key == KeyEvent.VK_D) {
+            shoot1Pressed = false;
+        }
+        if (key == KeyEvent.VK_LEFT) {
+            shoot2Pressed = false;
+        }
+        if (playerCount == 3) {
+            if (key == KeyEvent.VK_G) {
+                aPressed = false;
+            }
+            if (key == KeyEvent.VK_H) {
+                dPressed = false;
+            }
+            if (key == KeyEvent.VK_Y) {
+                shoot3Pressed = false;
+            }
+        }
+    }
+
+    public void keyTyped(KeyEvent e) {}
+
+    // Projectile class for managing projectile movement and collision
+    private class Projectile {
+        int x, y;
+        int vx, vy;
+
+        public Projectile(int x, int y, int vx, int vy) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+        }
+
+        public void move() {
+            x += vx;
+            y += vy;
+        }
+
+        public Rectangle getBounds() {
+            return new Rectangle(x, y, PROJECTILE_SIZE, PROJECTILE_SIZE);
+        }
+
+        public boolean isOffScreen() {
+            return x < 0 || x > getWidth() || y < 0 || y > getHeight();
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(PongGame::new);
+    }
+}
