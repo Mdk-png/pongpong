@@ -1,0 +1,203 @@
+package nabo;
+import nabo.PongF;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.List;
+
+// Clase para representar una pelota con su posición y velocidad
+class Ball {
+    int x, y, xSpeed, ySpeed;
+    private final int DIAMETER = 30;
+
+    public Ball(int startX, int startY, int xSpeed, int ySpeed) {
+        this.x = startX;
+        this.y = startY;
+        this.xSpeed = xSpeed;
+        this.ySpeed = ySpeed;
+    }
+
+    public void move(int panelWidth, int panelHeight) {
+        if (x + xSpeed < 0 || x + xSpeed > panelWidth - DIAMETER) {
+            xSpeed = -xSpeed;
+        }
+        if (y + ySpeed < 0 || y + ySpeed > panelHeight - DIAMETER) {
+            ySpeed = -ySpeed;
+        }
+        x += xSpeed;
+        y += ySpeed;
+    }
+
+    public void draw(Graphics g) {
+        g.setColor(Color.WHITE);
+        g.fillOval(x, y, DIAMETER, DIAMETER);
+    }
+}
+
+// Clase para el panel con la animación de las pelotas rebotando
+class BouncingBallPanel extends JPanel implements ActionListener {
+    private final List<Ball> balls = new ArrayList<>();
+    private final Timer timer;
+
+    public BouncingBallPanel() {
+        // Crear varias pelotas con posiciones y velocidades aleatorias
+        balls.add(new Ball(0, 0, 8, 8));
+        balls.add(new Ball(100, 100, 10, 9));
+        balls.add(new Ball(200, 200, 12, -5));
+        balls.add(new Ball(33, 140, 11, 10));
+        balls.add(new Ball(20, 150, 12, 9));
+        balls.add(new Ball(90, 160, 16, 6));
+        balls.add(new Ball(111, 180, 11, 13));
+        balls.add(new Ball(140, 190, 7, 12));
+        timer = new Timer(10, this);
+        timer.start();
+        setOpaque(false);  // Hacer el fondo del panel transparente
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        for (Ball ball : balls) {
+            ball.draw(g);
+        }
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        for (Ball ball : balls) {
+            ball.move(getWidth(), getHeight());
+        }
+        repaint();
+    }
+}
+
+// Clase principal para el menú
+public class Menu {
+
+    public static void main(String[] args) {
+        // Crear el marco de la ventana
+        JFrame frame = new JFrame("Pong Game Menu");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(600, 400);  // Tamaño aumentado de la ventana
+        frame.setLayout(new BorderLayout());
+        frame.getContentPane().setBackground(new Color(63,113,146));
+        frame.setResizable(false);
+        
+        // Crear un panel para la animación
+        BouncingBallPanel ballPanel = new BouncingBallPanel();
+        ballPanel.setPreferredSize(new Dimension(600, 400)); // Asegúrate de que el panel sea del tamaño correcto
+        ballPanel.setOpaque(false); // Fondo transparente para la animación
+        frame.add(ballPanel, BorderLayout.CENTER);
+
+        // Crear un panel para el título
+        JPanel titlePanel = new JPanel();
+        titlePanel.setOpaque(false);  // Fondo transparente
+        titlePanel.add(Box.createRigidArea(new Dimension(0, 50)));
+        JLabel titleLabel = new JLabel("Pong", JLabel.CENTER);
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 48));  // Título más grande
+        titleLabel.setForeground(Color.WHITE);  // Color del texto blanco
+        titlePanel.add(titleLabel);
+
+        // Crear un panel para los botones
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.Y_AXIS));
+        buttonPanel.setOpaque(false);  // Hacer el fondo del panel transparente
+
+        // Crear botones
+        JButton startButton = new JButton("J1 vs J2");
+        JButton CPUButton = new JButton("J1 vs CPU");
+        JButton exitButton = new JButton("Salir");
+
+        // Configurar botones
+        startButton.setFont(new Font("Arial", Font.BOLD, 20));  // Fuente más grande
+        startButton.setBackground(new Color(0, 0, 0, 0));  // Fondo transparente
+        startButton.setForeground(Color.WHITE);  // Color del texto blanco
+        startButton.setBorderPainted(false);  // Sin borde
+        startButton.setFocusPainted(false);  // Sin efecto de foco
+        
+        CPUButton.setFont(new Font("Arial", Font.BOLD, 20));  // Fuente más grande
+        CPUButton.setBackground(new Color(0, 0, 0, 0));  // Fondo transparente
+        CPUButton.setForeground(Color.WHITE);  // Color del texto blanco
+        CPUButton.setBorderPainted(false);  // Sin borde
+        CPUButton.setFocusPainted(false);  // Sin efecto de foco
+        
+        exitButton.setFont(new Font("Arial", Font.BOLD, 20));  // Fuente más grande
+        exitButton.setBackground(new Color(0, 0, 0, 0));  // Fondo transparente
+        exitButton.setForeground(Color.WHITE);  // Color del texto blanco
+        exitButton.setBorderPainted(false);  // Sin borde
+        exitButton.setFocusPainted(false);  // Sin efecto de foco
+
+        // Añadir acción al botón de inicio
+        startButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+            	PongF.startGame();
+            	JFrame menuFrame = (JFrame) SwingUtilities.getWindowAncestor(startButton);
+                menuFrame.dispose();
+            }
+        });
+
+        CPUButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // Puedes llamar a una función que inicializa el juego
+                // new PongGame().start();
+            }
+        });
+
+        exitButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                System.exit(0);  // Salir de la aplicación
+            }
+        });
+
+        // Añadir botones al panel de botones
+        buttonPanel.add(Box.createRigidArea(new Dimension(0, 140)));
+        buttonPanel.add(CPUButton);
+        buttonPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        buttonPanel.add(startButton);
+        buttonPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Espacio entre botones
+        buttonPanel.add(exitButton);
+
+        // Crear un panel de contenido central que alinee todo
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BorderLayout());
+        contentPanel.setOpaque(false);  // Fondo transparente
+        contentPanel.add(titlePanel, BorderLayout.CENTER);
+        contentPanel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        // Añadir el panel de contenido al panel de fondo
+        ballPanel.add(contentPanel, BorderLayout.CENTER);
+
+        // Hacer visible el marco
+        frame.setVisible(true);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+FUNCION en PONGF
+
+public static void startGame() {
+        JFrame frame = new JFrame("Pong Game");
+        PongF pongPanel = new PongF();
+        frame.add(pongPanel);
+        frame.pack();
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+     
+    }
+
+
+
