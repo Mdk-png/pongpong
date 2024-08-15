@@ -1,0 +1,449 @@
+package nabo;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class PongF extends JPanel implements KeyListener, ActionListener {
+    private int paddle1Y = 160, paddle2Y = 160;
+    private int ballX = 480, ballY = 272;
+    private double ballDirX = -4, ballDirY = 4;
+    private final int PADDLE_WIDTH = 16, PADDLE_HEIGHT = 64;
+    private final int BALL_SIZE = 16;
+    private int score1 = 0, score2 = 0;
+    private Timer timer;
+    private double speedMultiplier = 1.05;
+    private final int SCORE_LIMIT = 7; // Limite goles
+    private final int GAME_TIME = 120; // Tiempo en segundos
+    private long startTime;
+    private boolean gameOver = false; // Nueva bandera para controlar el estado del juego
+    private final int PROJECTILE_SIZE = 8;
+
+    private int inversa= 1;
+    // Movement flags
+    private boolean upPressed = false, downPressed = false;
+    private boolean wPressed = false, sPressed = false;
+    // Shooting flags
+    private boolean shoot1Pressed = false, shoot2Pressed = false;
+
+    // Last shoot time
+    private long lastShootTime1 = 0;
+    private long lastShootTime2 = 0;
+    private int SHOOT_COOLDOWN = 500; // 0.5 seconds in milliseconds
+
+    private List<Projectile> projectiles;
+
+    //------------------------------------
+    public PongF() {
+        setPreferredSize(new Dimension(1024, 576)); 
+        setBackground(new Color(63,113,146));
+        setFocusable(true);
+        addKeyListener(this);
+        timer = new Timer(20, this); 
+        timer.start();
+
+        startTime = System.currentTimeMillis(); // Iniciar juego
+
+        JFrame frame = new JFrame("Pong Game");
+        frame.add(this);
+        frame.pack();
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+
+        projectiles = new ArrayList<>();
+
+        createMenu();
+    }
+    private void createMenu() {
+
+        setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+        JMenuBar menuBar = new JMenuBar();
+        menuBar.setBackground(Color.BLACK);
+    
+        JMenu menu2 = new JMenu("Disparos");
+        menu2.setForeground(Color.WHITE);
+        menu2.setBackground(Color.BLACK);
+        JMenuItem velocidad1 = new JMenuItem("Lento");
+        velocidad1.setForeground(Color.WHITE);
+        velocidad1.setBackground(Color.BLACK);
+        JMenuItem velocidad2 = new JMenuItem("Rapido");
+        velocidad2.setForeground(Color.WHITE);
+        velocidad2.setBackground(Color.BLACK);
+        JMenuItem velocidad3 = new JMenuItem("Desactivar");
+        velocidad3.setForeground(Color.WHITE);
+        velocidad3.setBackground(Color.BLACK);
+      
+    
+        velocidad1.addActionListener(e -> changeshoot(500) );
+        velocidad2.addActionListener(e -> changeshoot(100));
+        velocidad3.addActionListener(e -> desactivar(5000000));
+        
+        menu2.add(velocidad1);
+        menu2.add(velocidad2);
+        menu2.add(velocidad3);
+        menuBar.add(menu2);
+
+        JFrame frame = new JFrame("Pong Game");
+        frame.setJMenuBar(menuBar);
+        frame.getContentPane().add(this);
+        frame.pack();
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+
+        setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+    }
+    private void changeshoot(int count) {
+    	SHOOT_COOLDOWN = count;
+    	resetGame();
+    }
+    private void desactivar(int count) {
+    	SHOOT_COOLDOWN = count; 
+    	resetGame();
+    }
+    private void resetGame() {
+        paddle1Y = 256; 
+        paddle2Y = 256;
+        ballX = 480;
+        ballY = 272;
+        score1 = 0;
+        score2 = 0;
+        ballDirX = -4;
+        ballDirY = 4;
+        speedMultiplier = 1.2; // Reiniciar multiplicador de tiempo
+        startTime = System.currentTimeMillis(); // Reiniciar tiempo de juego
+        gameOver = false; // Reiniciar estado del juego
+        repaint();
+    }
+
+    public void paintComponent(Graphics g) {
+        super.paintComponent(g);
+
+        Graphics2D g2d = (Graphics2D) g;
+
+        // LINEA MEDIO
+        g2d.setStroke(new BasicStroke(2));
+        g.setColor(Color.WHITE);
+        g.drawLine(0, 288, 1024, 288);
+        
+        // Draw middle dotted line
+        drawDottedLine(g2d, 512, 0, 512, getHeight());
+        
+        // Draw left paddle (Player 1)
+        g.setColor(new Color(240,76,49));
+        g.fillRect(16, paddle1Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+        // Draw right paddle (Player 2)
+        g.setColor(new Color(40,66,166));
+        g.fillRect(992, paddle2Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+        // Draw ball
+        g.setColor(new Color(237,195,49));
+        g.fillOval(ballX, ballY, BALL_SIZE, BALL_SIZE);
+      
+        g.setColor(Color.RED);
+        for (Projectile p : projectiles) {
+            g.fillRect(p.x, p.y, PROJECTILE_SIZE, PROJECTILE_SIZE);
+        }
+        // Draw scores
+        drawScore(g, score1, 256, 48);
+        drawScore(g, score2, 768, 48);
+
+        // Draw remaining time
+        long elapsedTime = (System.currentTimeMillis() - startTime) / 1000;
+        long remainingTime = GAME_TIME - elapsedTime;
+        if (remainingTime > 0 && !gameOver) {
+            g.setFont(new Font("Monospaced", Font.BOLD, 26));
+            g.setColor(Color.BLACK);
+            g.drawString("" + remainingTime + "", getWidth() / 2 - 90, 40);
+        } else if (!gameOver) {
+            gameOver = true; // Finalizar el juego
+            repaint();
+        } else {
+            drawGameOverScreen(g);
+        }
+    }
+
+    private void drawDottedLine(Graphics2D g2d, int x1, int y1, int x2, int y2) {
+        int segmentWidth = 10; // Ancho de cada segmento
+        int segmentHeight = 2; // Grosor de la línea
+        int dashLength = 5;   // Longitud de cada segmento
+        int gapLength = 0;    // Espaciado entre segmentos
+
+        g2d.setStroke(new BasicStroke(segmentHeight, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL));
+        
+        Color color1 = Color.DARK_GRAY;
+        Color color2 = Color.WHITE;
+
+        int length = y2 - y1;
+        int currentY = y1;
+        boolean drawColor1 = true;
+
+        while (currentY < y2) {
+            g2d.setColor(drawColor1 ? color1 : color2);
+            int nextY = Math.min(currentY + dashLength, y2);
+            g2d.drawLine(x1, currentY, x1, nextY);
+            currentY = nextY + gapLength;
+            drawColor1 = !drawColor1;
+        }
+    }
+
+    private void drawScore(Graphics g, int score, int x, int y) {
+        g.setFont(new Font("Monospaced", Font.BOLD, 32));
+        g.drawString(String.valueOf(score), x, y);
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        ballX += ballDirX;
+        ballY += ballDirY;
+        if (gameOver) return; 
+        // Update projectiles
+        for (Projectile p : projectiles) {
+            p.move();
+        }
+        
+
+        // Remove projectiles that go off-screen
+        projectiles.removeIf(p -> p.isOffScreen());
+
+        // Check collision between projectiles and the ball
+        checkProjectileCollisions();
+
+        // Check collision with top and bottom walls
+        if (ballY <= 0 || ballY >= getHeight() - BALL_SIZE) {
+            ballDirY = -ballDirY;
+        }
+
+     // Check collision with left paddle (Player 1)
+        if (ballX <= 32 && ballY + BALL_SIZE >= paddle1Y && ballY <= paddle1Y + PADDLE_HEIGHT) {
+            ballX = 33;  // Ajusta la posición de la pelota para que esté justo fuera de la paleta
+            ballDirX = -ballDirX;
+            increaseBallSpeed();
+        }
+
+     // Check collision with the top or bottom of the left paddle (Player 1)
+        if (ballX >= 16 && ballX <= 32) {
+            if (ballY + BALL_SIZE >= paddle1Y && ballY <= paddle1Y + PADDLE_HEIGHT) {
+                if (ballDirY > 0) {
+                    ballY = paddle1Y - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera del lado superior
+                } else {
+                    ballY = paddle1Y + PADDLE_HEIGHT;  // Ajusta la posición de la pelota para que esté justo fuera del lado inferior
+                }
+                ballDirX = -ballDirX;
+                increaseBallSpeed();
+            }
+        }
+
+
+
+
+     // Check collision with right paddle (Player 2)
+        if (ballX >= getWidth() - 48 && ballY + BALL_SIZE >= paddle2Y && ballY <= paddle2Y + PADDLE_HEIGHT) {
+            ballX = getWidth() - 48 - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera de la paleta
+            ballDirX = -ballDirX;
+            increaseBallSpeed();
+        }
+     // Check collision with the top or bottom of the right paddle (Player 2)
+        if (ballX >= getWidth() - 32 && ballX <= getWidth() - 16) {
+            if (ballY + BALL_SIZE >= paddle2Y && ballY <= paddle2Y + PADDLE_HEIGHT) {
+                if (ballDirY > 0) {
+                    ballY = paddle2Y - BALL_SIZE;  // Ajusta la posición de la pelota para que esté justo fuera del lado superior
+                } else {
+                    ballY = paddle2Y + PADDLE_HEIGHT;  // Ajusta la posición de la pelota para que esté justo fuera del lado inferior
+                }
+                ballDirX = -ballDirX;
+                increaseBallSpeed();
+            }
+        }
+
+
+    
+
+        // Check for scoring
+        if (ballX < 0) {
+            score2++;
+            if (score2 >= SCORE_LIMIT) {
+                gameOver = true;
+                repaint();
+            } else {
+                resetBall();
+            }
+        } else if (ballX > getWidth()) {
+            score1++;
+            if (score1 >= SCORE_LIMIT) {
+                gameOver = true;
+                repaint();
+            } else {
+                resetBall();
+            }
+        }
+        // Move paddles based on key presses
+        if (wPressed && paddle1Y > 0) {
+            paddle1Y -= 16;
+        }
+        if (sPressed && paddle1Y < getHeight() - PADDLE_HEIGHT) {
+            paddle1Y += 16;
+        }
+        if (upPressed && paddle2Y > 0) {
+            paddle2Y -= 16;
+        }
+        if (downPressed && paddle2Y < getHeight() - PADDLE_HEIGHT) {
+            paddle2Y += 16;
+        }
+       
+
+        // Handle shooting with cooldown
+        long currentTime = System.currentTimeMillis();
+        if (shoot1Pressed && (currentTime - lastShootTime1) >= SHOOT_COOLDOWN) {
+            projectiles.add(new Projectile(32, paddle1Y + PADDLE_HEIGHT / 2 - PROJECTILE_SIZE / 2, 12, 0));
+            lastShootTime1 = currentTime;
+        }
+        if (shoot2Pressed && (currentTime - lastShootTime2) >= SHOOT_COOLDOWN) {
+            projectiles.add(new Projectile(992, paddle2Y + PADDLE_HEIGHT / 2 - PROJECTILE_SIZE / 2, -12, 0));
+            lastShootTime2 = currentTime;
+        }
+     
+        repaint();
+    }
+
+    private void checkProjectileCollisions() {
+        for (Projectile p : projectiles) {
+            if (p.getBounds().intersects(new Rectangle(ballX, ballY, BALL_SIZE, BALL_SIZE))) {
+                // Change ball direction based on the projectile's movement
+                ballDirX += p.vx;
+                ballDirY += p.vy;
+                projectiles.remove(p);
+                break;
+            }
+        }
+    }
+
+    private void resetBall() {
+        
+    	ballX = 480; // Center ball for 16:9 field
+        ballY = 272;
+        ballDirX = -5 * -inversa;
+        ballDirY = 4;
+        speedMultiplier = 1.10; // Reset speed multiplier
+        inversa= -inversa;
+    }
+
+    private void increaseBallSpeed() {
+        ballDirX *= speedMultiplier;
+        ballDirY *= speedMultiplier;
+    }
+    
+    private void drawGameOverScreen(Graphics g) {
+
+        if (score1 > score2) {
+            g.setColor(new Color(40,66,166,120));
+            g.fillRect(0, 0, getWidth(), getHeight());
+        	
+            g.setColor(new Color(240,76,49)); // Color para jugador 
+        } else if(score2 > score1) {
+            g.setColor(new Color(240,76,49,120));
+            g.fillRect(0, 0, getWidth(), getHeight());
+            
+            g.setColor(new Color(40,66,166)); // Color para jugador 2
+        } else if(score1 == score2) {
+            g.setColor(new Color(0,0,0,120));
+            g.fillRect(0, 0, getWidth(), getHeight());
+            
+            g.setColor(new Color(255,255,255)); // Color para empate
+        }
+        
+        g.setFont(new Font("Monospaced", Font.BOLD, 36));
+        FontMetrics metrics = g.getFontMetrics();
+        String winnerText = (score1 > score2) ? "Jugador 1 Gana" : (score2 > score1) ? "Jugador 2 Gana" : "Empate";
+        int textWidth = metrics.stringWidth(winnerText);
+        int textHeight = metrics.getAscent();
+        int x = (getWidth() - textWidth) / 2;
+        int y = (getHeight() - textHeight) / 2 - 10;
+        
+        g.drawString(winnerText, x, y);
+        g.setFont(new Font("Monospaced", Font.BOLD, 30));
+        g.drawString("Presione R para reiniciar el juego", getWidth() / 2 - 270, getHeight() / 2 + 30);
+    }
+
+    public void keyPressed(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (key == KeyEvent.VK_W) {
+            wPressed = true;
+        }
+        if (key == KeyEvent.VK_S) {
+            sPressed = true;
+        }
+        if (key == KeyEvent.VK_UP) {
+            upPressed = true;
+        }
+        if (key == KeyEvent.VK_DOWN) {
+            downPressed = true;
+        }
+        if (key == KeyEvent.VK_D) {
+            shoot1Pressed = true;
+        }
+        if (key == KeyEvent.VK_LEFT) {
+            shoot2Pressed = true;
+        }
+        if (key == KeyEvent.VK_R && gameOver) {
+            resetGame();
+        }
+        }
+    
+
+    public void keyReleased(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (key == KeyEvent.VK_W) {
+            wPressed = false;
+        }
+        if (key == KeyEvent.VK_S) {
+            sPressed = false;
+        }
+        if (key == KeyEvent.VK_UP) {
+            upPressed = false;
+        }
+        if (key == KeyEvent.VK_DOWN) {
+            downPressed = false;
+        }
+        if (key == KeyEvent.VK_D) {
+            shoot1Pressed = false;
+        }
+        if (key == KeyEvent.VK_LEFT) {
+            shoot2Pressed = false;
+        }
+       
+        }
+    
+
+    public void keyTyped(KeyEvent e) {}
+
+    
+    private class Projectile {
+        int x, y;
+        int vx, vy;
+
+        public Projectile(int x, int y, int vx, int vy) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+        }
+
+        public void move() {
+            x += vx;
+            y += vy;
+        }
+
+        public Rectangle getBounds() {
+            return new Rectangle(x, y, PROJECTILE_SIZE, PROJECTILE_SIZE);
+        }
+
+        public boolean isOffScreen() {
+            return x < 0 || x > getWidth() || y < 0 || y > getHeight();
+        }
+    }
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(PongF::new);
+    }
+}
